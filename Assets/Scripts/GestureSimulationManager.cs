@@ -1,7 +1,8 @@
-// GestureSimulationManager.cs
+// GestureSimulationManager.cs (Corrected Final Version)
 using UnityEngine;
-using TMPro; // For TextMeshPro elements
-using System.Collections.Generic; // For List
+using UnityEngine.UI;   // --- ADDED THIS LINE to recognize the 'Button' type ---
+using TMPro;          // For TextMeshPro elements
+using System.Collections.Generic;
 using System;
 
 // Note: GestureData struct/class should be defined in your DataTypes.cs file
@@ -14,27 +15,43 @@ public class GestureSimulationManager : MonoBehaviour
     [Header("Simulation UI Elements")]
     public TMP_Text recognizedGestureText;        // Assign UI Text for output
     public TMP_Dropdown gestureSelectionDropdown;   // Assign UI Dropdown for selection
+    public Button simulateButton;                 // Assign your "Simulate Selected Gesture" button
+    public Button reloadButton;                   // Optional: Assign a "Reload Gestures" button
 
     void Start()
     {
+        // --- Dependency Checks ---
         if (gestureStorageManager == null)
         {
-            Debug.LogError("GestureSimulationManager: GestureStorageManager not assigned! Simulation UI will not function correctly.");
+            Debug.LogError("GestureSimulationManager: GestureStorageManager not assigned! UI will not function.");
             enabled = false; return;
         }
         if (recognizedGestureText == null) Debug.LogWarning("GestureSimulationManager: Recognized Gesture Text not assigned.");
         if (gestureSelectionDropdown == null) Debug.LogWarning("GestureSimulationManager: Gesture Selection Dropdown not assigned.");
+        if (simulateButton == null) Debug.LogWarning("GestureSimulationManager: Simulate Button not assigned.");
 
-        // Subscribe to the event from GestureStorageManager to update the dropdown when gestures are loaded/reloaded
+        // --- Add Listeners for UI Buttons ---
+        if (simulateButton != null)
+        {
+            simulateButton.onClick.AddListener(SimulateSelectedGestureFromDropdown);
+        }
+        if (reloadButton != null)
+        {
+            reloadButton.onClick.AddListener(ReloadGesturesButtonHandler);
+        }
+
+        // --- Subscribe to Event from GestureStorageManager ---
+        // This makes sure our dropdown updates whenever gestures are loaded/reloaded.
         gestureStorageManager.OnGesturesReloaded += PopulateGestureDropdown;
         
-        // Initial population of the dropdown
+        // --- Initial Population of the Dropdown ---
         PopulateGestureDropdown();
     }
 
     void OnDestroy()
     {
-        // Unsubscribe from the event when this object is destroyed
+        // --- Unsubscribe from Event ---
+        // This is important to prevent errors when objects are destroyed.
         if (gestureStorageManager != null)
         {
             gestureStorageManager.OnGesturesReloaded -= PopulateGestureDropdown;
@@ -51,7 +68,7 @@ public class GestureSimulationManager : MonoBehaviour
         if (gestureStorageManager.AllLoadedGestures.Count == 0)
         {
             dropdownOptions.Add(new TMP_Dropdown.OptionData("No gestures saved"));
-            if (recognizedGestureText != null) recognizedGestureText.text = "No gestures available to simulate.";
+            if (recognizedGestureText != null) recognizedGestureText.text = "No gestures available.";
         }
         else
         {
@@ -65,7 +82,7 @@ public class GestureSimulationManager : MonoBehaviour
         gestureSelectionDropdown.AddOptions(dropdownOptions);
         if (dropdownOptions.Count > 0 && !dropdownOptions[0].text.StartsWith("No gestures"))
         {
-            gestureSelectionDropdown.value = 0; // Select the first valid gesture by default
+            gestureSelectionDropdown.value = 0;
         }
         gestureSelectionDropdown.RefreshShownValue(); // Important to update the displayed value
     }
@@ -78,7 +95,7 @@ public class GestureSimulationManager : MonoBehaviour
             gestureSelectionDropdown.value >= gestureSelectionDropdown.options.Count ||
             gestureSelectionDropdown.options[gestureSelectionDropdown.value].text.StartsWith("No gestures")) 
         {
-            if (recognizedGestureText != null) recognizedGestureText.text = "No valid gesture selected to simulate."; 
+            if (recognizedGestureText != null) recognizedGestureText.text = "No valid gesture selected."; 
             Debug.LogWarning("GestureSimulationManager: No valid gesture selected in dropdown for simulation.");
             return;
         }
@@ -87,8 +104,7 @@ public class GestureSimulationManager : MonoBehaviour
         DisplayRecognizedGesture(selectedGestureName);
     }
 
-    // This method updates the UI Text with the "recognized" gesture name.
-    public void DisplayRecognizedGesture(string gestureName) 
+    private void DisplayRecognizedGesture(string gestureName) 
     {
         if (string.IsNullOrWhiteSpace(gestureName) || gestureName.ToLower().Contains("no gestures")) 
         {
@@ -96,11 +112,9 @@ public class GestureSimulationManager : MonoBehaviour
             return;
         }
         
-        // Optionally, verify against GestureStorageManager again, though dropdown should be accurate
         bool found = gestureStorageManager.AllLoadedGestures.Exists(g => g.gestureName == gestureName);
 
-        if (recognizedGestureText != null) 
-        {
+        if (recognizedGestureText != null) {
             if (found) 
             {
                 recognizedGestureText.text = $"Gesture (Simulated): {gestureName}";
@@ -108,15 +122,12 @@ public class GestureSimulationManager : MonoBehaviour
             }
             else 
             {
-                // This state should ideally not be reached if dropdown is synced
-                recognizedGestureText.text = $"Error: Gesture '{gestureName}' not found in storage for simulation.";
+                recognizedGestureText.text = $"Error: Gesture '{gestureName}' not in storage.";
                 Debug.LogWarning($"GestureSimulationManager: Attempted to display '{gestureName}', but it's not in GestureStorageManager's loaded list.");
             }
         }
     }
 
-    // This button handler now specifically tells GestureStorageManager to reload,
-    // which will then trigger the OnGesturesReloaded event, and PopulateGestureDropdown will run.
     public void ReloadGesturesButtonHandler() 
     { 
         if (gestureStorageManager != null)

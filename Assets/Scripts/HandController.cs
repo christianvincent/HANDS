@@ -1,73 +1,46 @@
-// HandController.cs (Now primarily a coordinator/dependency holder)
+// HandController.cs (Final Refactored Version - Coordinator)
 using UnityEngine;
-using TMPro; // Required if any TMP_ UIs were to remain, but they are moving out
-
-// Note: All data structures (GestureFrame, GestureData, Finger etc.)
-// should be defined in your DataTypes.cs file.
 
 public class HandController : MonoBehaviour
 {
     [Header("Core System Component Dependencies")]
+    [Tooltip("Manages receiving and parsing data from the ESP32.")]
     public InputDataManager inputDataManager; 
+    
+    [Tooltip("Manages animating the 3D hand model.")]
     public HandAnimator handAnimator;         
+    
+    [Tooltip("Manages loading and saving gesture data to files.")]
     public GestureStorageManager gestureStorageManager; 
+    
+    [Tooltip("Manages the UI and logic for recording new gestures.")]
     public GestureRecordingManager gestureRecordingManager; 
-    public GestureSimulationManager gestureSimulationManager; // --- NEW: Assign GestureSimulationManager ---
-
-    // All UI element references (InputFields, Texts, Dropdowns) have been moved 
-    // to GestureRecordingManager.cs and GestureSimulationManager.cs.
-
-    // All state variables (loadedGestures, _isRecording, etc.) have been moved.
-    // All methods for recording, saving, loading, simulating gestures have been moved.
+    
+    [Tooltip("Manages the UI and logic for simulating gesture recognition.")]
+    public GestureSimulationManager gestureSimulationManager; 
+    
+    [Tooltip("Manages the UI and logic for calibrating hand poses.")]
+    public HandCalibrationManager handCalibrationManager; 
 
     void Start()
     {
-        // Perform essential checks to ensure all managers are assigned.
-        // Without these, the system cannot function.
-        if (inputDataManager == null) {
-            Debug.LogError("HandController FATAL ERROR: InputDataManager not assigned!");
-            enabled = false; return; // Critical failure
-        }
-        if (handAnimator == null) {
-            Debug.LogError("HandController FATAL ERROR: HandAnimator not assigned!");
-            enabled = false; return; // Critical failure
-        }
-        if (gestureStorageManager == null) {
-            Debug.LogError("HandController FATAL ERROR: GestureStorageManager not assigned!");
-            enabled = false; return; // Critical failure
-        }
-        if (gestureRecordingManager == null) {
-            Debug.LogError("HandController FATAL ERROR: GestureRecordingManager not assigned!");
-            enabled = false; return; // Critical failure
-        }
-        if (gestureSimulationManager == null) {
-            Debug.LogError("HandController FATAL ERROR: GestureSimulationManager not assigned!");
-            enabled = false; return; // Critical failure
+        // This script's primary role is to ensure all systems are in place.
+        // It validates that all necessary manager components have been assigned in the Inspector.
+        bool criticalDependencyMissing = false;
+        if (inputDataManager == null) { Debug.LogError("HandController FATAL ERROR: InputDataManager not assigned!"); criticalDependencyMissing = true; }
+        if (handAnimator == null) { Debug.LogError("HandController FATAL ERROR: HandAnimator not assigned!"); criticalDependencyMissing = true; }
+        if (gestureStorageManager == null) { Debug.LogError("HandController FATAL ERROR: GestureStorageManager not assigned!"); criticalDependencyMissing = true; }
+        if (gestureRecordingManager == null) { Debug.LogError("HandController FATAL ERROR: GestureRecordingManager not assigned!"); criticalDependencyMissing = true; }
+        if (gestureSimulationManager == null) { Debug.LogError("HandController FATAL ERROR: GestureSimulationManager not assigned!"); criticalDependencyMissing = true; }
+        if (handCalibrationManager == null) { Debug.LogError("HandController FATAL ERROR: HandCalibrationManager not assigned!"); criticalDependencyMissing = true; }
+
+        if (criticalDependencyMissing)
+        {
+            Debug.LogError("HandController disabled due to missing critical dependencies. Check Inspector assignments on the HandController GameObject.");
+            enabled = false; 
+            return;
         }
 
-        Debug.Log("HandController: All core system components assigned and validated. System starting.");
-        // Any high-level initial coordination can happen here if needed,
-        // but most managers now initialize themselves and communicate via events or direct references.
+        Debug.Log("HandController: All core system components assigned and validated. System is operational.");
     }
-
-    void Update() 
-    {
-        // The HandController's Update() is now very minimal or empty.
-        // Each manager (InputDataManager, HandAnimator, GestureRecordingManager)
-        // handles its own Update logic if necessary.
-        // For example, HandAnimator updates the 3D model.
-        // GestureRecordingManager updates its recording status text and captures frames.
-    }
-
-    void OnApplicationQuit() 
-    {
-        // Managers should handle their own cleanup (e.g., SerialConnectionManager).
-        Debug.Log("HandController: Application quitting.");
-    }
-
-    // All other public methods previously here for UI button calls
-    // (StartRecordingGesture, StopRecordingAndSaveGesture, SimulateSelectedGestureFromDropdown,
-    // ReloadGesturesButtonHandler, DisplayRecognizedGesture)
-    // have been moved to either GestureRecordingManager.cs or GestureSimulationManager.cs.
-    // Your UI Buttons need to be re-linked to call these methods on instances of those new manager scripts.
 }
