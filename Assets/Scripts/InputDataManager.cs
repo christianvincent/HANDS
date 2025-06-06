@@ -1,7 +1,7 @@
-// InputDataManager.cs
+// InputDataManager.cs (with added debug log for raw pot values)
 using UnityEngine;
 using System;
-using System.Collections.Generic; // For List (used in Payloads)
+using System.Collections.Generic;
 
 public class InputDataManager : MonoBehaviour
 {
@@ -12,7 +12,7 @@ public class InputDataManager : MonoBehaviour
     private const int NUM_FINGERS = 5;
     private int adcMaxValue = 4095; // ESP32 default ADC max value (12-bit)
 
-    // Public properties to provide the latest data
+    // Public properties to provide the latest processed data
     public Quaternion TargetHandOrientation { get; private set; } = Quaternion.identity;
     public float[] PotCurlTargets { get; private set; } = new float[NUM_FINGERS];
     public int[] RawPotValues { get; private set; } = new int[NUM_FINGERS];
@@ -40,19 +40,18 @@ public class InputDataManager : MonoBehaviour
         {
             PotCurlTargets[i] = 0f;
             RawPotValues[i] = 0;
-            // Default uncalibrated values (min is high, max is low to force update on first calibration)
             _calibratedMinPot[i] = adcMaxValue;
             _calibratedMaxPot[i] = 0;
             _isPotCalibrated[i] = false;
         }
-        LoadCalibrationSettings(); // Load any saved settings
+        LoadCalibrationSettings();
     }
 
     void Start()
     {
         if (serialConnectionManager == null)
         {
-            Debug.LogError("InputDataManager: SerialConnectionManager not assigned!");
+            Debug.LogError("InputDataManager: SerialConnectionManager not assigned in Inspector!");
             enabled = false; return;
         }
         serialConnectionManager.OnSerialDataReceived += ProcessReceivedData;
@@ -97,17 +96,23 @@ public class InputDataManager : MonoBehaviour
             else if (baseData.key == "/pots")
             {
                 PotsPayload potsData = JsonUtility.FromJson<PotsPayload>(jsonString);
-                if (potsData.value != null)
+                if (potsData.value != null && potsData.value.Count >= NUM_FINGERS)
                 {
-                    for (int i = 0; i < potsData.value.Count && i < NUM_FINGERS; i++)
+                    // --- THIS IS THE CRUCIAL DEBUG LINE ---
+                    // This will print the raw values to the Unity Console every time a pot message is received.
+                    Debug.Log($"Raw Pot Values Received: [{potsData.value[0]}, {potsData.value[1]}, {potsData.value[2]}, {potsData.value[3]}, {potsData.value[4]}]");
+                    
+                    for (int i = 0; i < NUM_FINGERS; i++)
                     {
                         RawPotValues[i] = potsData.value[i]; // Store raw value
                         if (_isPotCalibrated[i] && _calibratedMaxPot[i] > _calibratedMinPot[i])
                         {
+                            // Use calibrated range to calculate curl
                             PotCurlTargets[i] = Mathf.Clamp01(Mathf.InverseLerp(_calibratedMinPot[i], _calibratedMaxPot[i], RawPotValues[i]));
                         }
-                        else // Use default mapping if not calibrated or if range is invalid
+                        else 
                         {
+                            // Use default mapping if not calibrated
                             PotCurlTargets[i] = Mathf.Clamp01((float)RawPotValues[i] / adcMaxValue);
                         }
                     }
@@ -123,7 +128,7 @@ public class InputDataManager : MonoBehaviour
         if (fingerIndex < 0 || fingerIndex >= NUM_FINGERS) return;
         _calibratedMinPot[fingerIndex] = minVal;
         _calibratedMaxPot[fingerIndex] = maxVal;
-        _isPotCalibrated[fingerIndex] = (maxVal > minVal); // Consider calibrated if range is valid
+        _isPotCalibrated[fingerIndex] = (maxVal > minVal); 
         Debug.Log($"Potentiometer calibration set for finger {fingerIndex}: Min={minVal}, Max={maxVal}, Calibrated={_isPotCalibrated[fingerIndex]}");
     }
 
@@ -140,9 +145,9 @@ public class InputDataManager : MonoBehaviour
         _calibratedMinPot[fingerIndex] = adcMaxValue;
         _calibratedMaxPot[fingerIndex] = 0;
         _isPotCalibrated[fingerIndex] = false;
-        PlayerPrefs.SetInt(KEY_IS_POT_CALIBRATED_PREFIX + fingerIndex, 0); // Mark as not calibrated
+        PlayerPrefs.SetInt(KEY_IS_POT_CALIBRATED_PREFIX + fingerIndex, 0); 
         Debug.Log($"Potentiometer calibration cleared for finger {fingerIndex}");
-        SaveCalibrationSettings(); // Save the cleared state
+        SaveCalibrationSettings(); 
     }
 
     public void ClearAllPotCalibration()
@@ -210,7 +215,7 @@ public class InputDataManager : MonoBehaviour
             PlayerPrefs.SetFloat(KEY_NEUTRAL_ORIENT_Y, _neutralOrientationOffset.y);
             PlayerPrefs.SetFloat(KEY_NEUTRAL_ORIENT_Z, _neutralOrientationOffset.z);
         }
-        PlayerPrefs.Save(); // Important: Write PlayerPrefs to disk
+        PlayerPrefs.Save(); 
         Debug.Log("InputDataManager: Calibration settings saved to PlayerPrefs.");
     }
 }
