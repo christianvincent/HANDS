@@ -5,8 +5,7 @@
 
 // Constants
 const int NUM_POTS = 5;
-const float DEADZONE_THRESHOLD = 0.02f;   // How much the sensor can move before we consider it "moving"
-// const unsigned long RESET_DELAY_MS = 1500; // No longer needed, as auto-reset is disabled
+const float DEADZONE_THRESHOLD = 0.02f;
 
 // MPU6050 object
 MPU6050 mpu(0x68);
@@ -19,10 +18,10 @@ const int potPins[NUM_POTS] = {36, 39, 34, 35, 32};
 int potValues[NUM_POTS] = {0};
 
 // Deadzone logic state
-Quaternion lastKnownOrientation = {1.0f, 0.0f, 0.0f, 0.0f}; // Last orientation when hand was moving
-unsigned long lastMovementTime = 0; // Still useful for debugging or other potential features
+Quaternion lastKnownOrientation = {1.0f, 0.0f, 0.0f, 0.0f};
+unsigned long lastMovementTime = 0;
 
-// Utility function to compare quaternions within a deadzone
+// Utility function to compare quaternions
 bool isInDeadzone(const Quaternion& a, const Quaternion& b, float threshold) {
     return abs(a.w - b.w) < threshold &&
            abs(a.x - b.x) < threshold &&
@@ -30,45 +29,50 @@ bool isInDeadzone(const Quaternion& a, const Quaternion& b, float threshold) {
            abs(a.z - b.z) < threshold;
 }
 
-// Log helper for USB Serial and Bluetooth Serial
-void logAll(const char* message) {
-    Serial.println(message);
+// Smart logging function
+void logToConnectedInterface(const String& message) {
     if (SerialBT.hasClient()) {
         SerialBT.println(message);
+    } else {
+        Serial.println(message);
+    }
+}
+void logToConnectedInterface(const char* message) {
+    if (SerialBT.hasClient()) {
+        SerialBT.println(message);
+    } else {
+        Serial.println(message);
     }
 }
 
-void logAll(const String& message) {
-    Serial.println(message);
-    if (SerialBT.hasClient()) {
-        SerialBT.println(message);
-    }
-}
-
-// --- SETUP FUNCTION - UNCHANGED ---
+// --- NEW "BRUTE-FORCE" SETUP FUNCTION ---
 void setup() {
+    Serial.begin(115200);
+    // Add a long initial delay to allow all hardware to stabilize after power-on.
+    delay(2000); 
+    Serial.println("Starting setup...");
+
     Wire.begin();
     Wire.setClock(100000);
-
-    Serial.begin(115200);
+    delay(100); // Small delay after I2C bus starts
 
     SerialBT.begin("ESP32-HandTracker");
-    logAll("{\"key\": \"/log\", \"value\": \"Bluetooth ESP32-HandTracker started.\", \"level\": \"INFO\"}");
+    Serial.println("{\"key\": \"/log\", \"value\": \"Bluetooth started.\", \"level\": \"INFO\"}");
 
-    logAll("{\"key\": \"/log\", \"value\": \"Initializing MPU6050...\", \"level\": \"DEBUG\"}");
+    Serial.println("{\"key\": \"/log\", \"value\": \"Initializing MPU6050...\", \"level\": \"DEBUG\"}");
     mpu.initialize();
+    delay(100); // Small delay after MPU init
 
-    if (!mpu.testConnection()) {
-        logAll("{\"key\": \"/log\", \"value\": \"MPU6050 connection failed. Check wiring.\", \"level\": \"ERROR\"}");
-    } else {
-        logAll("{\"key\": \"/log\", \"value\": \"MPU6050 connection successful.\", \"level\": \"INFO\"}");
-    }
-
-    logAll("{\"key\": \"/log\", \"value\": \"Initializing DMP...\", \"level\": \"DEBUG\"}");
+    Serial.println("{\"key\": \"/log\", \"value\": \"Initializing DMP...\", \"level\": \"DEBUG\"}");
     uint8_t dmpInitStatus = mpu.dmpInitialize();
 
+    // Check if DMP initialization was successful. This is our main connection test now.
     if (dmpInitStatus == 0) {
-        logAll("{\"key\": \"/log\", \"value\": \"Using default offsets. Unity-side calibration is recommended.\", \"level\": \"WARNING\"}");
+        Serial.println("{\"key\": \"/log\", \"value\": \"DMP Initialization successful.\", \"level\": \"INFO\"}");
+
+        // The testConnection() call is removed entirely.
+        
+        // Set offsets to 0 for a known starting state.
         mpu.setXGyroOffset(0);
         mpu.setYGyroOffset(0);
         mpu.setZGyroOffset(0);
@@ -76,55 +80,55 @@ void setup() {
         mpu.setYAccelOffset(0);
         mpu.setZAccelOffset(0);
 
+        // Enable the DMP
         mpu.setDMPEnabled(true);
-        logAll("{\"key\": \"/log\", \"value\": \"DMP enabled and MPU6050 ready.\", \"level\": \"INFO\"}");
+        Serial.println("{\"key\": \"/log\", \"value\": \"DMP enabled and MPU6050 ready.\", \"level\": \"INFO\"}");
         lastMovementTime = millis();
+
     } else {
+        // If DMP fails, we cannot continue.
         char errorMsg[150];
         snprintf(errorMsg, sizeof(errorMsg),
-                 "{\"key\": \"/log\", \"value\": \"DMP Initialization failed (code %d). Check MPU6050.\", \"level\": \"ERROR\"}",
+                 "{\"key\": \"/log\", \"value\": \"CRITICAL: DMP Initialization FAILED (code %d). Halting.\", \"level\": \"ERROR\"}",
                  dmpInitStatus);
-        logAll(errorMsg);
-        while (1) delay(100);
+        Serial.println(errorMsg);
+        while (1) delay(100); // Halt
     }
 }
 
-// --- LOOP FUNCTION - WITH AUTO-RESET DISABLED ---
+// --- LOOP FUNCTION - Unchanged ---
 void loop() {
-    if (!mpu.getDMPEnabled() || !SerialBT.hasClient()) {
+    if (!mpu.getDMPEnabled()) {
+        return;
+    }
+    
+    if (!Serial && !SerialBT.hasClient()) {
         delay(100); 
         return;
     }
 
-    uint8_t fifoBuffer[64];
+    uint8_t fifoBuffer[64]; 
     if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
         Quaternion q_from_sensor;
         Quaternion q_to_send;
         
         mpu.dmpGetQuaternion(&q_from_sensor, fifoBuffer);
 
-        // --- Deadzone Logic (Auto-Reset Disabled) ---
         if (isInDeadzone(q_from_sensor, lastKnownOrientation, DEADZONE_THRESHOLD)) {
-            // Hand is considered still. Use the last known good orientation
-            // to eliminate any small jittering.
             q_to_send = lastKnownOrientation;
         } else {
-            // Hand is moving. Update the state.
             lastMovementTime = millis();
             lastKnownOrientation = q_from_sensor;
             q_to_send = q_from_sensor;
         }
-        // --- End of Logic ---
 
-        // Send orientation data
         char orientationBuffer[180];
         snprintf(orientationBuffer, sizeof(orientationBuffer),
                  "{\"key\": \"/orientation\", \"value\": [%.6f, %.6f, %.6f, %.6f]}",
                  q_to_send.w, q_to_send.x, q_to_send.y, q_to_send.z);
-        logAll(orientationBuffer);
+        logToConnectedInterface(orientationBuffer);
     }
 
-    // Read and send potentiometer values
     String potData = "{\"key\": \"/pots\", \"value\": [";
     for (int i = 0; i < NUM_POTS; i++) {
         potValues[i] = analogRead(potPins[i]);
@@ -134,7 +138,7 @@ void loop() {
         }
     }
     potData += "]}";
-    logAll(potData);
+    logToConnectedInterface(potData);
 
-    delay(10); // Maintain a consistent loop rate
+    delay(10); 
 }
