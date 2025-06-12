@@ -1,18 +1,25 @@
-// SerialConnectionManager.cs (with Robust Reading Loop)
+// SerialConnectionManager.cs
 using UnityEngine;
 using System.IO.Ports;
 using System.Threading;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text; // --- ADDED THIS for StringBuilder ---
+using System.Text;
 
 public class SerialConnectionManager : MonoBehaviour
 {
     [Header("Serial Connection Settings")]
     public string comPort = "COM3";
     public int baudRate = 115200;
-    public int readTimeout = 100; // Note: ReadLine uses this, our new method is more resilient
+    public int readTimeout = 100;
+
+    // NEW: A public property to safely check connection status from other scripts.
+    // It is a "read-only" property (it only has a "get" block).
+    public bool IsConnected
+    {
+        get { return _serialPort != null && _serialPort.IsOpen; }
+    }
 
     private SerialPort _serialPort;
     private Thread _serialReadThread;
@@ -21,8 +28,6 @@ public class SerialConnectionManager : MonoBehaviour
     private object _queueLock = new object();
 
     public event Action<string> OnSerialDataReceived;
-
-    void Awake() {}
 
     void Start()
     {
@@ -41,7 +46,7 @@ public class SerialConnectionManager : MonoBehaviour
             _serialPort = new SerialPort(comPort, baudRate)
             {
                 ReadTimeout = this.readTimeout,
-                Encoding = Encoding.UTF8 // Ensure consistent encoding
+                Encoding = Encoding.UTF8
             };
             _serialPort.Open();
             _isRunning = true;
@@ -61,7 +66,6 @@ public class SerialConnectionManager : MonoBehaviour
         }
     }
 
-    // --- NEW, MORE ROBUST METHOD for reading serial data ---
     private void ReadSerialDataLoop()
     {
         StringBuilder stringBuilder = new StringBuilder();
@@ -70,17 +74,14 @@ public class SerialConnectionManager : MonoBehaviour
         {
             try
             {
-                // Read a single byte
                 int byteRead = _serialPort.ReadByte();
-                if (byteRead == -1) // No data available
+                if (byteRead == -1)
                 {
                     continue;
                 }
 
-                // Convert byte to character
                 char character = Convert.ToChar(byteRead);
 
-                // If character is a newline, we have a complete message
                 if (character == '\n')
                 {
                     if (stringBuilder.Length > 0)
@@ -90,24 +91,24 @@ public class SerialConnectionManager : MonoBehaviour
                         {
                             _dataQueue.Enqueue(completeLine);
                         }
-                        stringBuilder.Clear(); // Reset for the next message
+                        stringBuilder.Clear();
                     }
                 }
                 else
                 {
-                    // Append character to our message buffer
                     stringBuilder.Append(character);
                 }
             }
-            catch (TimeoutException) { 
-                // ReadByte can also timeout, this is normal if there's no data
-            }
-            catch (IOException ioe) {
+            catch (TimeoutException) { }
+            catch (IOException ioe)
+            {
                 Debug.LogError($"Serial port IO Exception on {comPort}: {ioe.Message}. Stopping thread.");
-                _isRunning = false; 
+                _isRunning = false;
             }
-            catch (Exception e) {
-                if (_isRunning) {
+            catch (Exception e)
+            {
+                if (_isRunning)
+                {
                     Debug.LogError($"Error reading from serial port {comPort}: {e.Message}");
                 }
             }
@@ -116,7 +117,6 @@ public class SerialConnectionManager : MonoBehaviour
         Debug.Log($"Serial read thread for {comPort} has finished.");
     }
 
-
     void Update()
     {
         List<string> linesToProcess = new List<string>();
@@ -124,7 +124,7 @@ public class SerialConnectionManager : MonoBehaviour
         {
             while (_dataQueue.Count > 0) { linesToProcess.Add(_dataQueue.Dequeue()); }
         }
-        foreach(string dataLine in linesToProcess)
+        foreach (string dataLine in linesToProcess)
         {
             OnSerialDataReceived?.Invoke(dataLine);
         }
@@ -132,17 +132,19 @@ public class SerialConnectionManager : MonoBehaviour
 
     public void CloseConnection()
     {
-        _isRunning = false; 
+        _isRunning = false;
         if (_serialReadThread != null && _serialReadThread.IsAlive)
         {
-            if (!_serialReadThread.Join(500)) {
+            if (!_serialReadThread.Join(500))
+            {
                 Debug.LogWarning($"Serial read thread for {comPort} did not finish in time.");
             }
             _serialReadThread = null;
         }
         if (_serialPort != null)
         {
-            if (_serialPort.IsOpen) {
+            if (_serialPort.IsOpen)
+            {
                 try { _serialPort.Close(); Debug.Log($"Serial port {comPort} explicitly closed."); }
                 catch (Exception e) { Debug.LogError($"Error closing serial port {comPort}: {e.Message}"); }
             }

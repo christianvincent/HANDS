@@ -1,10 +1,10 @@
 // HandAnimator.cs
 using UnityEngine;
-using System;
 
 public class HandAnimator : MonoBehaviour
 {
     [Header("Dependencies")]
+    // MODIFIED: Assign the InputDataManager for the specific hand this animator controls.
     public InputDataManager inputDataManager;
 
     [Header("Hand Model References")]
@@ -14,26 +14,24 @@ public class HandAnimator : MonoBehaviour
     [Header("Movement Configuration")]
     public float fingerCurlMinAngle = 0f;
     public float fingerCurlMaxAngle = 90f;
-    public float orientationSlerpSpeed = 10f;
-    public float fingerSlerpSpeed = 15f;
+    public float orientationSlerpSpeed = 15f;
+    public float fingerSlerpSpeed = 20f;
 
-    // --- NEW: For pausing animation during calibration ---
     public bool IsAnimationPaused { get; set; } = false;
-    // --- END NEW ---
 
     void Start()
     {
-        if (inputDataManager == null) { Debug.LogError("HandAnimator: InputDataManager not assigned!"); enabled = false; return; }
-        if (handRootTransform == null) { Debug.LogError("HandAnimator: Hand Root Transform not assigned!"); enabled = false; return; }
-        if (fingers == null || fingers.Length != 5) { Debug.LogError("HandAnimator: Fingers array not set up correctly!"); if (fingers == null || fingers.Length !=5) fingers = new Finger[5]; for(int i=0; i<5; i++) if(fingers[i]==null) fingers[i] = new Finger { name = "Finger " + i }; enabled = false; return; }
+        // Added a reference to the specific hand for clearer logs.
+        if (inputDataManager == null) { Debug.LogError($"HandAnimator: InputDataManager not assigned!", this.gameObject); enabled = false; return; }
+        if (handRootTransform == null) { Debug.LogError($"HandAnimator ({inputDataManager.handType}): Hand Root Transform not assigned!", this.gameObject); enabled = false; return; }
+        if (fingers == null || fingers.Length != 5) { Debug.LogError($"HandAnimator ({inputDataManager.handType}): Fingers array not set up correctly!", this.gameObject); enabled = false; return; }
     }
 
     void Update()
     {
-        // --- NEW: Check if animation is paused ---
         if (IsAnimationPaused || !enabled || inputDataManager == null) return;
-        // --- END NEW ---
 
+        // The core logic is the same, but it now gets data from its specific InputDataManager.
         Quaternion currentTargetOrientation = inputDataManager.TargetHandOrientation;
         float[] currentPotCurls = inputDataManager.PotCurlTargets;
 

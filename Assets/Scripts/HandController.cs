@@ -1,34 +1,41 @@
-// HandController.cs (Final Refactored Version - Coordinator)
+// HandController.cs
 using UnityEngine;
 
 public class HandController : MonoBehaviour
 {
     [Header("Core System Component Dependencies")]
-    [Tooltip("Manages receiving and parsing data from the ESP32.")]
-    public InputDataManager inputDataManager; 
-    
-    [Tooltip("Manages animating the 3D hand model.")]
-    public HandAnimator handAnimator;         
-    
+    [Tooltip("Manages receiving and parsing data for the RIGHT hand.")]
+    public InputDataManager rightInputManager;
+
+    [Tooltip("Manages receiving and parsing data for the LEFT hand.")]
+    public InputDataManager leftInputManager;
+
+    [Tooltip("Manages animating the RIGHT 3D hand model.")]
+    public HandAnimator rightHandAnimator;
+
+    [Tooltip("Manages animating the LEFT 3D hand model.")]
+    public HandAnimator leftHandAnimator;
+
     [Tooltip("Manages loading and saving gesture data to files.")]
-    public GestureStorageManager gestureStorageManager; 
-    
+    public GestureStorageManager gestureStorageManager;
+
     [Tooltip("Manages the UI and logic for recording new gestures.")]
-    public GestureRecordingManager gestureRecordingManager; 
-    
+    public GestureRecordingManager gestureRecordingManager;
+
     [Tooltip("Manages the UI and logic for simulating gesture recognition.")]
-    public GestureSimulationManager gestureSimulationManager; 
-    
+    public GestureSimulationManager gestureSimulationManager;
+
     [Tooltip("Manages the UI and logic for calibrating hand poses.")]
-    public HandCalibrationManager handCalibrationManager; 
+    public HandCalibrationManager handCalibrationManager;
 
     void Start()
     {
-        // This script's primary role is to ensure all systems are in place.
-        // It validates that all necessary manager components have been assigned in the Inspector.
         bool criticalDependencyMissing = false;
-        if (inputDataManager == null) { Debug.LogError("HandController FATAL ERROR: InputDataManager not assigned!"); criticalDependencyMissing = true; }
-        if (handAnimator == null) { Debug.LogError("HandController FATAL ERROR: HandAnimator not assigned!"); criticalDependencyMissing = true; }
+
+        if (rightInputManager == null) { Debug.LogError("HandController FATAL ERROR: Right InputDataManager not assigned!"); criticalDependencyMissing = true; }
+        if (leftInputManager == null) { Debug.LogError("HandController FATAL ERROR: Left InputDataManager not assigned!"); criticalDependencyMissing = true; }
+        if (rightHandAnimator == null) { Debug.LogError("HandController FATAL ERROR: Right HandAnimator not assigned!"); criticalDependencyMissing = true; }
+        if (leftHandAnimator == null) { Debug.LogError("HandController FATAL ERROR: Left HandAnimator not assigned!"); criticalDependencyMissing = true; }
         if (gestureStorageManager == null) { Debug.LogError("HandController FATAL ERROR: GestureStorageManager not assigned!"); criticalDependencyMissing = true; }
         if (gestureRecordingManager == null) { Debug.LogError("HandController FATAL ERROR: GestureRecordingManager not assigned!"); criticalDependencyMissing = true; }
         if (gestureSimulationManager == null) { Debug.LogError("HandController FATAL ERROR: GestureSimulationManager not assigned!"); criticalDependencyMissing = true; }
@@ -37,7 +44,7 @@ public class HandController : MonoBehaviour
         if (criticalDependencyMissing)
         {
             Debug.LogError("HandController disabled due to missing critical dependencies. Check Inspector assignments on the HandController GameObject.");
-            enabled = false; 
+            enabled = false;
             return;
         }
 

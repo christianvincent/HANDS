@@ -1,30 +1,30 @@
-// InputDataManager.cs (with added debug log for raw pot values)
+// InputDataManager.cs
 using UnityEngine;
 using System;
-using System.Collections.Generic;
 
 public class InputDataManager : MonoBehaviour
 {
+    [Header("Hand Specification")]
+    public HandType handType;
+    // NEW: A checkbox to manually invert the final curl value if needed.
+    [Tooltip("Check this if this hand's animation appears reversed (opens when it should close).")]
+    public bool invertFinalCurlValue;
+
     [Header("Dependencies")]
     public SerialConnectionManager serialConnectionManager;
 
-    [Header("Configuration")]
-    private const int NUM_FINGERS = 5;
-    private int adcMaxValue = 4095; // ESP32 default ADC max value (12-bit)
+    // ... The rest of the script is the same until the ProcessReceivedData method ...
 
-    // Public properties to provide the latest processed data
+    private const int NUM_FINGERS = 5;
+    private const int ADC_MAX_VALUE = 4095;
     public Quaternion TargetHandOrientation { get; private set; } = Quaternion.identity;
     public float[] PotCurlTargets { get; private set; } = new float[NUM_FINGERS];
     public int[] RawPotValues { get; private set; } = new int[NUM_FINGERS];
-
-    // Calibration data
     private int[] _calibratedMinPot = new int[NUM_FINGERS];
     private int[] _calibratedMaxPot = new int[NUM_FINGERS];
     private bool[] _isPotCalibrated = new bool[NUM_FINGERS];
     private Quaternion _neutralOrientationOffset = Quaternion.identity;
     private bool _isOrientationOffsetSet = false;
-
-    // PlayerPrefs keys
     private const string KEY_POT_MIN_PREFIX = "PotMin_";
     private const string KEY_POT_MAX_PREFIX = "PotMax_";
     private const string KEY_IS_POT_CALIBRATED_PREFIX = "IsPotCalibrated_";
@@ -40,7 +40,7 @@ public class InputDataManager : MonoBehaviour
         {
             PotCurlTargets[i] = 0f;
             RawPotValues[i] = 0;
-            _calibratedMinPot[i] = adcMaxValue;
+            _calibratedMinPot[i] = ADC_MAX_VALUE;
             _calibratedMaxPot[i] = 0;
             _isPotCalibrated[i] = false;
         }
@@ -51,11 +51,11 @@ public class InputDataManager : MonoBehaviour
     {
         if (serialConnectionManager == null)
         {
-            Debug.LogError("InputDataManager: SerialConnectionManager not assigned in Inspector!");
-            enabled = false; return;
+            Debug.LogError($"InputDataManager ({handType}): SerialConnectionManager not assigned!", this.gameObject);
+            enabled = false;
+            return;
         }
         serialConnectionManager.OnSerialDataReceived += ProcessReceivedData;
-        Debug.Log("InputDataManager subscribed to OnSerialDataReceived.");
     }
 
     void OnDestroy()
@@ -69,153 +69,139 @@ public class InputDataManager : MonoBehaviour
     private void ProcessReceivedData(string jsonString)
     {
         if (string.IsNullOrWhiteSpace(jsonString)) return;
+        if (!jsonString.StartsWith("{") || !jsonString.EndsWith("}"))
+        {
+            Debug.LogWarning($"Skipping malformed or incomplete packet for {handType}: {jsonString}");
+            return;
+        }
 
         try
         {
-            Esp32JsonData baseData = JsonUtility.FromJson<Esp32JsonData>(jsonString);
+            Esp32CombinedData data = JsonUtility.FromJson<Esp32CombinedData>(jsonString);
 
-            if (baseData.key == "/orientation")
+            if (data.q != null && data.q.Count == 4)
             {
-                OrientationPayload orientationData = JsonUtility.FromJson<OrientationPayload>(jsonString);
-                if (orientationData.value != null && orientationData.value.Count == 4)
-                {
-                    float esp_w = orientationData.value[0]; float esp_x = orientationData.value[1];
-                    float esp_y = orientationData.value[2]; float esp_z = orientationData.value[3];
-                    Quaternion rawMpuOrientation = new Quaternion(esp_x, esp_y, esp_z, esp_w);
+                float esp_w = data.q[0]; float esp_x = data.q[1]; float esp_y = data.q[2]; float esp_z = data.q[3];
+                Quaternion rawMpuOrientation = new Quaternion(esp_x, esp_y, esp_z, esp_w);
+                Quaternion reoriented = new Quaternion(rawMpuOrientation.x, rawMpuOrientation.z, rawMpuOrientation.y, -rawMpuOrientation.w);
 
-                    if (_isOrientationOffsetSet)
+                if (_isOrientationOffsetSet) { TargetHandOrientation = Quaternion.Inverse(_neutralOrientationOffset) * reoriented; }
+                else { TargetHandOrientation = reoriented; }
+            }
+
+            if (data.p != null && data.p.Count >= NUM_FINGERS)
+            {
+                for (int i = 0; i < NUM_FINGERS; i++)
+                {
+                    RawPotValues[i] = data.p[i];
+                    float normalizedValue = 0f;
+
+                    if (_isPotCalibrated[i] && _calibratedMaxPot[i] != _calibratedMinPot[i])
                     {
-                        TargetHandOrientation = Quaternion.Inverse(_neutralOrientationOffset) * rawMpuOrientation;
+                        normalizedValue = Mathf.InverseLerp(_calibratedMinPot[i], _calibratedMaxPot[i], RawPotValues[i]);
                     }
                     else
                     {
-                        TargetHandOrientation = rawMpuOrientation;
+                        normalizedValue = (float)RawPotValues[i] / ADC_MAX_VALUE;
                     }
-                }
-            }
-            else if (baseData.key == "/pots")
-            {
-                PotsPayload potsData = JsonUtility.FromJson<PotsPayload>(jsonString);
-                if (potsData.value != null && potsData.value.Count >= NUM_FINGERS)
-                {
-                    // --- THIS IS THE CRUCIAL DEBUG LINE ---
-                    // This will print the raw values to the Unity Console every time a pot message is received.
-                    Debug.Log($"Raw Pot Values Received: [{potsData.value[0]}, {potsData.value[1]}, {potsData.value[2]}, {potsData.value[3]}, {potsData.value[4]}]");
                     
-                    for (int i = 0; i < NUM_FINGERS; i++)
+                    // NEW: If the invert flag is checked, flip the final 0-1 value.
+                    if (invertFinalCurlValue)
                     {
-                        RawPotValues[i] = potsData.value[i]; // Store raw value
-                        if (_isPotCalibrated[i] && _calibratedMaxPot[i] > _calibratedMinPot[i])
-                        {
-                            // Use calibrated range to calculate curl
-                            PotCurlTargets[i] = Mathf.Clamp01(Mathf.InverseLerp(_calibratedMinPot[i], _calibratedMaxPot[i], RawPotValues[i]));
-                        }
-                        else 
-                        {
-                            // Use default mapping if not calibrated
-                            PotCurlTargets[i] = Mathf.Clamp01((float)RawPotValues[i] / adcMaxValue);
-                        }
+                        PotCurlTargets[i] = 1.0f - normalizedValue;
                     }
+                    else
+                    {
+                        PotCurlTargets[i] = normalizedValue;
+                    }
+
+                    // The Clamp01 is implicitly handled by InverseLerp and our 1.0f - value logic.
                 }
             }
         }
-        catch (Exception e) { Debug.LogError($"InputDataManager: Error processing JSON '{jsonString}': {e.Message}"); }
+        catch (Exception e)
+        {
+            Debug.LogError($"InputDataManager ({handType}): Error processing JSON '{jsonString}': {e.Message}");
+        }
     }
 
-    // --- Calibration Methods ---
+    // --- The rest of the script (calibration methods) is unchanged ---
     public void SetPotentiometerCalibrationData(int fingerIndex, int minVal, int maxVal)
     {
         if (fingerIndex < 0 || fingerIndex >= NUM_FINGERS) return;
         _calibratedMinPot[fingerIndex] = minVal;
         _calibratedMaxPot[fingerIndex] = maxVal;
-        _isPotCalibrated[fingerIndex] = (maxVal > minVal); 
-        Debug.Log($"Potentiometer calibration set for finger {fingerIndex}: Min={minVal}, Max={maxVal}, Calibrated={_isPotCalibrated[fingerIndex]}");
+        _isPotCalibrated[fingerIndex] = true; // Mark as calibrated even if min/max are same, logic handles it
     }
 
-    public void SetNeutralOrientation(Quaternion neutralOrientation)
+    public void SetNeutralOrientation(Quaternion rawNeutralOrientation)
     {
-        _neutralOrientationOffset = neutralOrientation;
+        Quaternion reoriented = new Quaternion(rawNeutralOrientation.x, rawNeutralOrientation.z, rawNeutralOrientation.y, -rawNeutralOrientation.w);
+        _neutralOrientationOffset = reoriented;
         _isOrientationOffsetSet = true;
-        Debug.Log($"Neutral orientation offset set: {neutralOrientation.eulerAngles}");
+    }
+
+    private string PrefsKey(string baseKey) => $"{handType}_{baseKey}";
+    
+    public void LoadCalibrationSettings()
+    {
+        _isOrientationOffsetSet = PlayerPrefs.GetInt(PrefsKey(KEY_IS_ORIENT_OFFSET_SET), 0) == 1;
+        if (_isOrientationOffsetSet)
+        {
+            _neutralOrientationOffset.w = PlayerPrefs.GetFloat(PrefsKey(KEY_NEUTRAL_ORIENT_W), 1f);
+            _neutralOrientationOffset.x = PlayerPrefs.GetFloat(PrefsKey(KEY_NEUTRAL_ORIENT_X), 0f);
+            _neutralOrientationOffset.y = PlayerPrefs.GetFloat(PrefsKey(KEY_NEUTRAL_ORIENT_Y), 0f);
+            _neutralOrientationOffset.z = PlayerPrefs.GetFloat(PrefsKey(KEY_NEUTRAL_ORIENT_Z), 0f);
+        }
+        for (int i = 0; i < NUM_FINGERS; i++)
+        {
+            _isPotCalibrated[i] = PlayerPrefs.GetInt(PrefsKey(KEY_IS_POT_CALIBRATED_PREFIX + i), 0) == 1;
+            if (_isPotCalibrated[i])
+            {
+                _calibratedMinPot[i] = PlayerPrefs.GetInt(PrefsKey(KEY_POT_MIN_PREFIX + i), ADC_MAX_VALUE);
+                _calibratedMaxPot[i] = PlayerPrefs.GetInt(PrefsKey(KEY_POT_MAX_PREFIX + i), 0);
+            }
+        }
+    }
+
+    public void SaveCalibrationSettings()
+    {
+        PlayerPrefs.SetInt(PrefsKey(KEY_IS_ORIENT_OFFSET_SET), _isOrientationOffsetSet ? 1 : 0);
+        if (_isOrientationOffsetSet)
+        {
+            PlayerPrefs.SetFloat(PrefsKey(KEY_NEUTRAL_ORIENT_W), _neutralOrientationOffset.w);
+            PlayerPrefs.SetFloat(PrefsKey(KEY_NEUTRAL_ORIENT_X), _neutralOrientationOffset.x);
+            PlayerPrefs.SetFloat(PrefsKey(KEY_NEUTRAL_ORIENT_Y), _neutralOrientationOffset.y);
+            PlayerPrefs.SetFloat(PrefsKey(KEY_NEUTRAL_ORIENT_Z), _neutralOrientationOffset.z);
+        }
+        for (int i = 0; i < NUM_FINGERS; i++)
+        {
+            PlayerPrefs.SetInt(PrefsKey(KEY_IS_POT_CALIBRATED_PREFIX + i), _isPotCalibrated[i] ? 1 : 0);
+            if (_isPotCalibrated[i])
+            {
+                PlayerPrefs.SetInt(PrefsKey(KEY_POT_MIN_PREFIX + i), _calibratedMinPot[i]);
+                PlayerPrefs.SetInt(PrefsKey(KEY_POT_MAX_PREFIX + i), _calibratedMaxPot[i]);
+            }
+        }
+        PlayerPrefs.Save();
+        Debug.Log($"({handType}) Calibration settings saved to PlayerPrefs.");
     }
     
-    public void ClearPotCalibrationForFinger(int fingerIndex)
-    {
-        if (fingerIndex < 0 || fingerIndex >= NUM_FINGERS) return;
-        _calibratedMinPot[fingerIndex] = adcMaxValue;
-        _calibratedMaxPot[fingerIndex] = 0;
-        _isPotCalibrated[fingerIndex] = false;
-        PlayerPrefs.SetInt(KEY_IS_POT_CALIBRATED_PREFIX + fingerIndex, 0); 
-        Debug.Log($"Potentiometer calibration cleared for finger {fingerIndex}");
-        SaveCalibrationSettings(); 
-    }
-
     public void ClearAllPotCalibration()
     {
         for (int i = 0; i < NUM_FINGERS; i++)
         {
-            _calibratedMinPot[i] = adcMaxValue;
-            _calibratedMaxPot[i] = 0;
             _isPotCalibrated[i] = false;
-            PlayerPrefs.SetInt(KEY_IS_POT_CALIBRATED_PREFIX + i, 0);
+            _calibratedMinPot[i] = ADC_MAX_VALUE;
+            _calibratedMaxPot[i] = 0;
         }
-        Debug.Log("All potentiometer calibrations cleared.");
         SaveCalibrationSettings();
     }
 
     public void ClearOrientationOffset()
     {
-        _neutralOrientationOffset = Quaternion.identity;
         _isOrientationOffsetSet = false;
-        PlayerPrefs.SetInt(KEY_IS_ORIENT_OFFSET_SET, 0);
-        Debug.Log("Neutral orientation offset cleared.");
+        _neutralOrientationOffset = Quaternion.identity;
         SaveCalibrationSettings();
-    }
-
-    public void LoadCalibrationSettings()
-    {
-        for (int i = 0; i < NUM_FINGERS; i++)
-        {
-            _isPotCalibrated[i] = PlayerPrefs.GetInt(KEY_IS_POT_CALIBRATED_PREFIX + i, 0) == 1;
-            if (_isPotCalibrated[i])
-            {
-                _calibratedMinPot[i] = PlayerPrefs.GetInt(KEY_POT_MIN_PREFIX + i, adcMaxValue);
-                _calibratedMaxPot[i] = PlayerPrefs.GetInt(KEY_POT_MAX_PREFIX + i, 0);
-            }
-        }
-
-        _isOrientationOffsetSet = PlayerPrefs.GetInt(KEY_IS_ORIENT_OFFSET_SET, 0) == 1;
-        if (_isOrientationOffsetSet)
-        {
-            _neutralOrientationOffset.w = PlayerPrefs.GetFloat(KEY_NEUTRAL_ORIENT_W, 1f);
-            _neutralOrientationOffset.x = PlayerPrefs.GetFloat(KEY_NEUTRAL_ORIENT_X, 0f);
-            _neutralOrientationOffset.y = PlayerPrefs.GetFloat(KEY_NEUTRAL_ORIENT_Y, 0f);
-            _neutralOrientationOffset.z = PlayerPrefs.GetFloat(KEY_NEUTRAL_ORIENT_Z, 0f);
-        }
-        Debug.Log("InputDataManager: Calibration settings loaded from PlayerPrefs.");
-    }
-
-    public void SaveCalibrationSettings()
-    {
-        for (int i = 0; i < NUM_FINGERS; i++)
-        {
-            PlayerPrefs.SetInt(KEY_IS_POT_CALIBRATED_PREFIX + i, _isPotCalibrated[i] ? 1 : 0);
-            if (_isPotCalibrated[i])
-            {
-                PlayerPrefs.SetInt(KEY_POT_MIN_PREFIX + i, _calibratedMinPot[i]);
-                PlayerPrefs.SetInt(KEY_POT_MAX_PREFIX + i, _calibratedMaxPot[i]);
-            }
-        }
-
-        PlayerPrefs.SetInt(KEY_IS_ORIENT_OFFSET_SET, _isOrientationOffsetSet ? 1 : 0);
-        if (_isOrientationOffsetSet)
-        {
-            PlayerPrefs.SetFloat(KEY_NEUTRAL_ORIENT_W, _neutralOrientationOffset.w);
-            PlayerPrefs.SetFloat(KEY_NEUTRAL_ORIENT_X, _neutralOrientationOffset.x);
-            PlayerPrefs.SetFloat(KEY_NEUTRAL_ORIENT_Y, _neutralOrientationOffset.y);
-            PlayerPrefs.SetFloat(KEY_NEUTRAL_ORIENT_Z, _neutralOrientationOffset.z);
-        }
-        PlayerPrefs.Save(); 
-        Debug.Log("InputDataManager: Calibration settings saved to PlayerPrefs.");
     }
 }

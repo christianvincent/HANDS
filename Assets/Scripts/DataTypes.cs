@@ -1,26 +1,62 @@
-// DataTypes.cs
+// DataType.cs
 using UnityEngine;
-using System.Collections.Generic; // For List
-using System; // For Array.Copy and Serializable
+using System.Collections.Generic;
+using System;
 
-// Helper struct for a single frame of gesture data
+// NEW: An enum to clearly identify which hand a component or data belongs to.
+[System.Serializable]
+public enum HandType { Right, Left }
+
+// NEW: This class matches the combined JSON packet sent by the ESP32.
+[System.Serializable]
+public class Esp32CombinedData
+{
+    public List<float> q; // for the quaternion
+    public List<int> p;   // for the potentiometers
+}
+
+// MODIFIED: This struct now holds the pose for a single hand.
+[System.Serializable]
+public struct HandPose
+{
+    public bool isTracked;
+    public Quaternion handOrientation;
+    public float[] fingerCurls;
+
+    public HandPose(bool tracked, Quaternion orientation, float[] curls)
+    {
+        isTracked = tracked;
+        handOrientation = orientation;
+        if (curls != null)
+        {
+            fingerCurls = new float[curls.Length];
+            Array.Copy(curls, fingerCurls, curls.Length);
+        }
+        else
+        {
+            fingerCurls = new float[5]; // Default to 5 fingers
+        }
+    }
+}
+
+
+// MODIFIED: A frame of a gesture now contains pose data for both hands.
 [System.Serializable]
 public struct GestureFrame
 {
     public float timestamp;
-    public Quaternion handOrientation;
-    public float[] fingerCurls; // Should be size 5
+    public HandPose rightHand;
+    public HandPose leftHand;
 
-    public GestureFrame(float time, Quaternion orientation, float[] curls)
+    public GestureFrame(float time, HandPose right, HandPose left)
     {
         timestamp = time;
-        handOrientation = orientation;
-        fingerCurls = new float[curls.Length];
-        Array.Copy(curls, fingerCurls, curls.Length);
+        rightHand = right;
+        leftHand = left;
     }
 }
 
-// Helper class to hold a complete gesture sequence
+// Unchanged, but kept for clarity
 [System.Serializable]
 public class GestureData
 {
@@ -36,17 +72,7 @@ public class GestureData
     }
 }
 
-// Helper classes for parsing ESP32 JSON data
-[System.Serializable]
-public class Esp32JsonData { public string key; }
-
-[System.Serializable]
-public class OrientationPayload { public string key; public List<float> value; }
-
-[System.Serializable]
-public class PotsPayload { public string key; public List<int> value; }
-
-// Helper class for managing finger joints
+// Unchanged, but kept for clarity
 [System.Serializable]
 public class Finger
 {
@@ -59,3 +85,14 @@ public class Finger
     public float intermediateCurlWeight = 1.0f;
     public float distalCurlWeight = 0.8f;
 }
+
+// DEPRECATED: These classes are no longer needed with the new combined JSON format.
+// You can safely delete them if you wish.
+/*
+[System.Serializable]
+public class Esp32JsonData { public string key; }
+[System.Serializable]
+public class OrientationPayload { public string key; public List<float> value; }
+[System.Serializable]
+public class PotsPayload { public string key; public List<int> value; }
+*/
