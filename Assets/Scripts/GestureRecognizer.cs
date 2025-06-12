@@ -1,126 +1,119 @@
-// // GestureRecognizer.cs
-// using UnityEngine;
-// using Unity.Sentis; // The Sentis engine namespace
-// using System;
-// using System.Collections.Generic;
-// using System.Linq; // For an easy way to get the last N elements
+// GestureRecognizer.cs
+using UnityEngine;
+using TMPro;
+using System.Collections.Generic;
+using System.Linq;
 
-// public class GestureRecognizer : MonoBehaviour
-// {
-//     [Header("Dependencies")]
-//     public InputDataManager inputDataManager; // Assign in Inspector
+public class GestureRecognizer : MonoBehaviour
+{
+    [Header("System Dependencies")]
+    [Tooltip("The InputDataManager for the hand you want to track (e.g., RightHandController).")]
+    public InputDataManager handToTrack;
 
-//     [Header("ML Model")]
-//     public ModelAsset modelAsset; // Assign your .onnx model file here in Inspector
-//     private Model _runtimeModel;
-//     private IWorker _engine;
+    [Header("Recognition Settings")]
+    [Tooltip("The maximum difference score to be considered a match. Lower is stricter. Start with 0.3")]
+    public float recognitionThreshold = 0.3f;
 
-//     [Header("Real-time Recognition Settings")]
-//     [Tooltip("The number of frames the model expects for a single gesture sequence.")]
-//     public int sequenceLength = 60; // Example: 60 frames = 1-2 seconds at 30-60fps
-    
-//     [Tooltip("How often to run inference (e.g., run every 10 frames).")]
-//     public int inferenceInterval = 10; 
-    
-//     [Tooltip("Minimum confidence from the model to be considered a valid recognition.")]
-//     public float confidenceThreshold = 0.85f;
+    [Header("UI Elements")]
+    [Tooltip("The TextMeshPro UI element to display the name of the recognized pose.")]
+    public TextMeshProUGUI recognizedPoseText;
 
-//     // This event will be fired when a gesture is recognized
-//     public event Action<string> OnGestureRecognized; 
+    // The internal library of poses loaded from Resources
+    private List<StaticPoseData> _poseLibrary;
+    private StaticPoseData _lastRecognizedPose = null;
 
-//     // A buffer to hold the most recent sensor data
-//     private List<GestureFrame> liveDataBuffer = new List<GestureFrame>();
-//     private float lastInferenceTime = 0f;
-//     private string[] gestureLabels; // Will hold the names of your gestures, e.g., {"wave", "fist", "point"}
+    void Start()
+    {
+        if (handToTrack == null)
+        {
+            Debug.LogError("GestureRecognizer: 'Hand To Track' (InputDataManager) is not assigned!");
+            enabled = false;
+            return;
+        }
 
-//     void Start()
-//     {
-//         if (inputDataManager == null) { Debug.LogError("GestureRecognizer: InputDataManager not assigned!"); enabled = false; return; }
-//         if (modelAsset == null) { Debug.LogError("GestureRecognizer: ONNX Model Asset not assigned!"); enabled = false; return; }
+        // Load all pose assets from the Resources/Poses folder
+        LoadPoseLibrary();
 
-//         // --- Sentis: Load the model and create the inference engine ---
-//         _runtimeModel = ModelLoader.Load(modelAsset);
-//         _engine = WorkerFactory.CreateWorker(BackendType.GPUCompute, _runtimeModel);
+        if (recognizedPoseText != null)
+        {
+            recognizedPoseText.text = "No Pose Detected";
+        }
+    }
 
-//         // --- IMPORTANT: Define your gesture labels ---
-//         // The order MUST MATCH the output order of your trained model.
-//         // For example, if your Python script trained with "fist" as class 0, "wave" as class 1, "point" as class 2...
-//         gestureLabels = new string[] { "fist", "wave", "point" }; // ** REPLACE WITH YOUR ACTUAL GESTURE LABELS IN THE CORRECT ORDER **
-//     }
+    void LoadPoseLibrary()
+    {
+        _poseLibrary = Resources.LoadAll<StaticPoseData>("Poses").ToList();
+        if (_poseLibrary.Count == 0)
+        {
+            Debug.LogError("GestureRecognizer: No StaticPoseData assets found in 'Assets/Resources/Poses' folder!");
+        }
+        else
+        {
+            Debug.Log($"Loaded {_poseLibrary.Count} poses into the library.");
+        }
+    }
 
-//     void Update()
-//     {
-//         if (inputDataManager == null) return;
+    void Update()
+    {
+        if (_poseLibrary.Count == 0) return;
 
-//         // --- 1. Continuously collect data into a buffer ---
-//         // We create a new GestureFrame from the live data
-//         liveDataBuffer.Add(new GestureFrame(
-//             Time.time,
-//             inputDataManager.TargetHandOrientation,
-//             inputDataManager.PotCurlTargets
-//         ));
+        // Get the current finger curls from the hand we are tracking
+        float[] currentCurls = handToTrack.PotCurlTargets;
 
-//         // Keep the buffer at a fixed size (the sequence length our model expects)
-//         while (liveDataBuffer.Count > sequenceLength)
-//         {
-//             liveDataBuffer.RemoveAt(0);
-//         }
+        StaticPoseData bestMatch = null;
+        float lowestDifference = float.MaxValue;
 
-//         // --- 2. Run inference periodically ---
-//         // Check if enough time has passed since the last inference run
-//         if (Time.time - lastInferenceTime > (inferenceInterval * Time.deltaTime) && liveDataBuffer.Count == sequenceLength)
-//         {
-//             lastInferenceTime = Time.time;
-//             RunInference();
-//         }
-//     }
+        // Loop through every pose in our library
+        foreach (var pose in _poseLibrary)
+        {
+            // Calculate how different the current pose is from the template
+            float difference = CalculatePoseDifference(currentCurls, pose.fingerCurls);
 
-//     private void RunInference()
-//     {
-//         // This is a placeholder for the logic to prepare data and run the model.
-//         // The actual implementation will depend on your model's specific input shape.
-//         Debug.Log("Running inference with a window of " + liveDataBuffer.Count + " frames.");
+            // If this pose is a better match than the last one we checked, store it
+            if (difference < lowestDifference)
+            {
+                lowestDifference = difference;
+                bestMatch = pose;
+            }
+        }
 
-//         // --- Step A: Prepare the input Tensor ---
-//         // You would convert your 'liveDataBuffer' (a list of GestureFrames) into a flat array or
-//         // multi-dimensional array that matches your model's expected input shape (e.g., [1, sequenceLength, numFeatures]).
-//         // let's say numFeatures is 9 (w,x,y,z for quat + 5 for fingers)
-//         // TensorFloat inputTensor = new TensorFloat(new TensorShape(1, sequenceLength, 9), yourFlatArrayOfData);
+        // After checking all poses, if our best match is within the threshold...
+        if (bestMatch != null && lowestDifference < recognitionThreshold)
+        {
+            // We have a recognized pose!
+            if (bestMatch != _lastRecognizedPose)
+            {
+                _lastRecognizedPose = bestMatch;
+                if (recognizedPoseText != null)
+                {
+                    recognizedPoseText.text = _lastRecognizedPose.poseName;
+                    Debug.Log($"Recognized Pose: {_lastRecognizedPose.poseName} (Score: {lowestDifference})");
+                }
+            }
+        }
+        else
+        {
+            // No pose is close enough to be a match
+            if (_lastRecognizedPose != null)
+            {
+                _lastRecognizedPose = null;
+                if (recognizedPoseText != null)
+                {
+                    recognizedPoseText.text = "No Pose Detected";
+                }
+            }
+        }
+    }
 
-//         // --- Step B: Execute the model ---
-//         // _engine.Execute(inputTensor);
-
-//         // --- Step C: Get the output Tensor ---
-//         // TensorFloat outputTensor = _engine.PeekOutput() as TensorFloat;
-
-//         // --- Step D: Interpret the results ---
-//         // The outputTensor will contain probabilities for each gesture. Find the one with the highest probability.
-//         // float highestConfidence = 0;
-//         // int recognizedIndex = -1;
-//         // for (int i = 0; i < gestureLabels.Length; i++) {
-//         //    if (outputTensor[i] > highestConfidence) {
-//         //        highestConfidence = outputTensor[i];
-//         //        recognizedIndex = i;
-//         //    }
-//         // }
-
-//         // --- Step E: Fire the event if confidence is high enough ---
-//         // if (recognizedIndex != -1 && highestConfidence >= confidenceThreshold) {
-//         //     string recognizedGesture = gestureLabels[recognizedIndex];
-//         //     OnGestureRecognized?.Invoke(recognizedGesture);
-//         //     Debug.Log($"RECOGNIZED: {recognizedGesture} with confidence {highestConfidence}");
-//         //     // Optional: Clear the buffer to prevent immediate re-recognition
-//         //     // liveDataBuffer.Clear(); 
-//         // }
-
-//         // --- IMPORTANT ---
-//         // The commented-out code above is a template. You will need to implement the actual
-//         // data-to-tensor conversion and result interpretation based on your specific trained model.
-//     }
-
-//     void OnDestroy()
-//     {
-//         // Clean up the Sentis engine when the object is destroyed
-//         _engine?.Dispose();
-//     }
-// }
+    // This helper function calculates the "difference score" between two poses.
+    // A lower score means the poses are more similar.
+    private float CalculatePoseDifference(float[] liveCurls, List<float> templateCurls)
+    {
+        float totalDifference = 0;
+        for (int i = 0; i < 5; i++)
+        {
+            totalDifference += Mathf.Abs(liveCurls[i] - templateCurls[i]);
+        }
+        return totalDifference;
+    }
+}
