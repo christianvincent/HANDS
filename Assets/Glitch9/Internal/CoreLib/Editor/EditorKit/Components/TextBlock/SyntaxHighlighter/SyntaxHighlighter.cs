@@ -1,0 +1,100 @@
+using System.Collections.Generic;
+
+namespace Glitch9.Editor
+{
+
+    public abstract class SyntaxHighlighter
+    {
+        private static readonly Dictionary<string, SyntaxHighlighter> _syntaxHighlighters = new();
+        private static readonly Dictionary<int, string> _cachedHighlightedCode = new();
+
+        public static string Highlight(string language, string code)
+        {
+            if (string.IsNullOrEmpty(language) || string.IsNullOrEmpty(code))
+            {
+                return string.Empty;
+            }
+
+            if (_cachedHighlightedCode.TryGetValue(code.GetHashCode(), out string highlightedCode))
+            {
+                return highlightedCode;
+            }
+
+            SyntaxHighlighter syntaxHighlighter = GetSyntaxHighlighter(language);
+            highlightedCode = syntaxHighlighter.HighlightInternal(code);
+            _cachedHighlightedCode[code.GetHashCode()] = highlightedCode;
+
+            return highlightedCode;
+        }
+
+        private static SyntaxHighlighter GetSyntaxHighlighter(string language)
+        {
+            if (!_syntaxHighlighters.TryGetValue(language, out SyntaxHighlighter syntaxHighlighter))
+            {
+                switch (language)
+                {
+                    case "csharp":
+                        syntaxHighlighter = new CSharpSyntaxHighlighter();
+                        break;
+                    case "java":
+                        syntaxHighlighter = new JavaSyntaxHighlighter();
+                        break;
+                    case "python":
+                        syntaxHighlighter = new PythonSyntaxHighlighter();
+                        break;
+                    case "javascript":
+                        syntaxHighlighter = new JavaScriptSyntaxHighlighter();
+                        break;
+                    case "typescript":
+                        syntaxHighlighter = new TypeScriptSyntaxHighlighter();
+                        break;
+                    case "html":
+                        syntaxHighlighter = new HtmlSyntaxHighlighter();
+                        break;
+                    case "ruby":
+                        syntaxHighlighter = new RubySyntaxHighlighter();
+                        break;
+                    case "css":
+                        syntaxHighlighter = new CssSyntaxHighlighter();
+                        break;
+                    case "cpp":
+                        syntaxHighlighter = new CppSyntaxHighlighter();
+                        break;
+                    case "objective-c":
+                        syntaxHighlighter = new ObjectiveCSyntaxHighlighter();
+                        break;
+                    case "swift":
+                        syntaxHighlighter = new SwiftSyntaxHighlighter();
+                        break;
+                    case "kotlin":
+                        syntaxHighlighter = new KotlinSyntaxHighlighter();
+                        break;
+                    case "dart":
+                        syntaxHighlighter = new DartSyntaxHighlighter();
+                        break;
+                }
+
+                _syntaxHighlighters[language] = syntaxHighlighter;
+            }
+
+            return syntaxHighlighter;
+        }
+
+        protected static class Colors
+        {
+            internal const string Blue = "#4a90e2ff";
+            internal const string Green = "#26f0b9ff";
+            internal const string Pink = "#ff5a5aff";
+            internal const string Red = "red";
+            internal const string Orange = "#f5a623ff";
+            internal const string Gray = "#929292ff";
+            public const string Purple = "#C586C0";
+            public const string LightGreen = "#B5CEA8";
+            public const string Teal = "#4EC9B0";
+            public const string Yellow = "#DCDCAA";
+            public const string White = "#FFFFFF";
+        }
+
+        protected abstract string HighlightInternal(string code);
+    }
+}

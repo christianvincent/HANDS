@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4bb136c12431ace4ca6d6a6f5059f1f4
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 287974
+  packageName: "AI Dev Kit \u2013 Use GPT-4o, Gemini, TTS with Just One Line (Auto
+    API Routing)"
+  packageVersion: 3.10.2
+  assetPath: Assets/Glitch9/Internal/CoreLib/Editor/EditorKit/Components/LoadingIndicator/EditorLoadingCircle
+  uploadId: 762400

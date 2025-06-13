@@ -1,36 +1,40 @@
-// SerialConnectionManager.cs
+// SerialConnectionManager.cs (Simplified Inspector-Driven Version)
 using UnityEngine;
 using System.IO.Ports;
 using System.Threading;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Text;
 
 public class SerialConnectionManager : MonoBehaviour
 {
     [Header("Serial Connection Settings")]
+    [Tooltip("Set the COM Port for this device here (e.g., COM3).")]
     public string comPort = "COM3";
     public int baudRate = 115200;
     public int readTimeout = 100;
 
-    // NEW: A public property to safely check connection status from other scripts.
-    // It is a "read-only" property (it only has a "get" block).
-    public bool IsConnected
-    {
-        get { return _serialPort != null && _serialPort.IsOpen; }
-    }
+    // Public property to safely check connection status from other scripts
+    public bool IsConnected => _serialPort != null && _serialPort.IsOpen;
 
+    // Private variables for handling the connection and threading
     private SerialPort _serialPort;
     private Thread _serialReadThread;
     private volatile bool _isRunning = false;
-    private Queue<string> _dataQueue = new Queue<string>();
-    private object _queueLock = new object();
+    private readonly Queue<string> _dataQueue = new Queue<string>();
+    private readonly object _queueLock = new object();
 
+    // Event that other scripts (like InputDataManager) can subscribe to
     public event Action<string> OnSerialDataReceived;
 
+    // When the script starts, it immediately tries to connect.
     void Start()
     {
+        if (string.IsNullOrEmpty(comPort))
+        {
+            Debug.LogError("COM Port is not set in the Inspector. Connection failed.");
+            return;
+        }
         Connect();
     }
 
@@ -50,13 +54,11 @@ public class SerialConnectionManager : MonoBehaviour
             };
             _serialPort.Open();
             _isRunning = true;
-
             _serialReadThread = new Thread(ReadSerialDataLoop)
             {
                 IsBackground = true
             };
             _serialReadThread.Start();
-
             Debug.Log($"Successfully opened serial port {comPort}");
         }
         catch (Exception e)
@@ -69,64 +71,43 @@ public class SerialConnectionManager : MonoBehaviour
     private void ReadSerialDataLoop()
     {
         StringBuilder stringBuilder = new StringBuilder();
-
         while (_isRunning && _serialPort != null && _serialPort.IsOpen)
         {
             try
             {
                 int byteRead = _serialPort.ReadByte();
-                if (byteRead == -1)
-                {
-                    continue;
-                }
-
+                if (byteRead == -1) continue;
                 char character = Convert.ToChar(byteRead);
-
                 if (character == '\n')
                 {
                     if (stringBuilder.Length > 0)
                     {
                         string completeLine = stringBuilder.ToString().Trim();
-                        lock (_queueLock)
-                        {
-                            _dataQueue.Enqueue(completeLine);
-                        }
+                        lock (_queueLock) { _dataQueue.Enqueue(completeLine); }
                         stringBuilder.Clear();
                     }
                 }
-                else
-                {
-                    stringBuilder.Append(character);
-                }
+                else { stringBuilder.Append(character); }
             }
             catch (TimeoutException) { }
-            catch (IOException ioe)
-            {
-                Debug.LogError($"Serial port IO Exception on {comPort}: {ioe.Message}. Stopping thread.");
-                _isRunning = false;
-            }
             catch (Exception e)
             {
-                if (_isRunning)
-                {
-                    Debug.LogError($"Error reading from serial port {comPort}: {e.Message}");
-                }
+                if (_isRunning) { Debug.LogError($"Error reading from serial port {comPort}: {e.Message}"); }
             }
         }
-        _isRunning = false;
-        Debug.Log($"Serial read thread for {comPort} has finished.");
     }
 
     void Update()
     {
-        List<string> linesToProcess = new List<string>();
-        lock (_queueLock)
+        if (_dataQueue.Count > 0)
         {
-            while (_dataQueue.Count > 0) { linesToProcess.Add(_dataQueue.Dequeue()); }
-        }
-        foreach (string dataLine in linesToProcess)
-        {
-            OnSerialDataReceived?.Invoke(dataLine);
+            lock (_queueLock)
+            {
+                while (_dataQueue.Count > 0)
+                {
+                    OnSerialDataReceived?.Invoke(_dataQueue.Dequeue());
+                }
+            }
         }
     }
 
@@ -135,11 +116,7 @@ public class SerialConnectionManager : MonoBehaviour
         _isRunning = false;
         if (_serialReadThread != null && _serialReadThread.IsAlive)
         {
-            if (!_serialReadThread.Join(500))
-            {
-                Debug.LogWarning($"Serial read thread for {comPort} did not finish in time.");
-            }
-            _serialReadThread = null;
+            if (!_serialReadThread.Join(500)) { Debug.LogWarning($"Serial read thread for {comPort} did not finish in time."); }
         }
         if (_serialPort != null)
         {

@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac13ed38019e57d4f9153a7c2ea8a015, type: 3}
+  m_Name: imagen-3.0-generate-002
+  m_EditorClassIdentifier: 
+  id: models/imagen-3.0-generate-002
+  displayName: Imagen 3.0 002 model
+  api: 2
+  deprecated: 0
+  custom: 0
+  locked: 0
+  family: Imagen
+  familyVersion: 3.0
+  modelVersion: 002
+  legacy: 0
+  inputModality: 2
+  outputModality: 2
+  capability: 128
+  maxInputTokens: 480
+  maxOutputTokens: 8192
+  prices:
+  - rid: 2360785718276522047
+  references:
+    version: 2
+    RefIds:
+    - rid: 2360785718276522047
+      type: {class: ModelPrice, ns: Glitch9.AIDevKit, asm: Glitch9.AIDevKit}
+      data:
+        type: 5
+        cost: 0.03
+        isEstimated: 0

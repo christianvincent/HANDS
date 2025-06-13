@@ -1,0 +1,10 @@
+fileFormatVersion: 2
+guid: 6eaccdb59b8e7f8439f99b14bab2766d
+AssetOrigin:
+  serializedVersion: 1
+  productId: 287974
+  packageName: "AI Dev Kit \u2013 Use GPT-4o, Gemini, TTS with Just One Line (Auto
+    API Routing)"
+  packageVersion: 3.10.2
+  assetPath: Assets/Glitch9/AIDevKit/Runtime/Scripts/OpenAI/Models/Realtime/Common/Conversation.cs
+  uploadId: 762400

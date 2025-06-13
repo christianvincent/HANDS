@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac13ed38019e57d4f9153a7c2ea8a015, type: 3}
+  m_Name: goliath-120b
+  m_EditorClassIdentifier: 
+  id: alpindale/goliath-120b
+  displayName: Goliath 120B
+  api: 6
+  deprecated: 0
+  custom: 0
+  locked: 0
+  family: Goliath
+  familyVersion: 
+  modelVersion: 
+  legacy: 0
+  inputModality: 1
+  outputModality: 1
+  capability: 7
+  maxInputTokens: 6144
+  maxOutputTokens: 512
+  prices:
+  - rid: 2360785718276522048
+  - rid: 2360785718276522049
+  references:
+    version: 2
+    RefIds:
+    - rid: 2360785718276522048
+      type: {class: ModelPrice, ns: Glitch9.AIDevKit, asm: Glitch9.AIDevKit}
+      data:
+        type: 1
+        cost: 0.0000065625
+        isEstimated: 0
+    - rid: 2360785718276522049
+      type: {class: ModelPrice, ns: Glitch9.AIDevKit, asm: Glitch9.AIDevKit}
+      data:
+        type: 2
+        cost: 0.000009375
+        isEstimated: 0

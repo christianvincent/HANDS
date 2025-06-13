@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: a047e600ecf89f44eba93f2e31b5a15f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 287974
+  packageName: "AI Dev Kit \u2013 Use GPT-4o, Gemini, TTS with Just One Line (Auto
+    API Routing)"
+  packageVersion: 3.10.2
+  assetPath: Assets/Glitch9/AIDevKit/Runtime/Resources/Models/dall-e-2.asset
+  uploadId: 762400

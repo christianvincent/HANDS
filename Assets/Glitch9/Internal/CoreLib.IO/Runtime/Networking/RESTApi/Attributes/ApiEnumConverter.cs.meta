@@ -1,0 +1,10 @@
+fileFormatVersion: 2
+guid: 9d46851d546927b47928cf76f0102e88
+AssetOrigin:
+  serializedVersion: 1
+  productId: 287974
+  packageName: "AI Dev Kit \u2013 Use GPT-4o, Gemini, TTS with Just One Line (Auto
+    API Routing)"
+  packageVersion: 3.10.2
+  assetPath: Assets/Glitch9/Internal/CoreLib.IO/Runtime/Networking/RESTApi/Attributes/ApiEnumConverter.cs
+  uploadId: 762400

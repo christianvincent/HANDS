@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: b49d18b7679e32143850b1a96e1c0d68
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 287974
+  packageName: "AI Dev Kit \u2013 Use GPT-4o, Gemini, TTS with Just One Line (Auto
+    API Routing)"
+  packageVersion: 3.10.2
+  assetPath: Assets/Glitch9/AIDevKit/Runtime/Resources/Voices/fenrir.asset
+  uploadId: 762400
